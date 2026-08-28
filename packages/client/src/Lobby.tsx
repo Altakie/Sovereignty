@@ -216,8 +216,6 @@ export function Lobby() {
   // const gameSocket = useGameSocket(setConnected);
   useGameSocket();
   //
-  const _set_router_state = useGlobalStore((state) => state.set_router_state);
-  //
   // const [player_names, setPlayerNames] = useState<string[]>([])
   // const [gameStarted, setGameStarted] = useState<typeof LobbyState[keyof typeof LobbyState]>(LobbyState.LOBBY)
   // const [choice_list, setChoiceList] = useState<JSX.Element>(null)

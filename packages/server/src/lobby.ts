@@ -11,6 +11,8 @@ import {
 import { Game } from "./game";
 import { AISocket, type MessageSink } from "./socket";
 
+const MAX_PLAYERS = 6;
+
 export type PlayerLobbyInfo = {
   clientid: string;
   socket: MessageSink;
@@ -22,16 +24,19 @@ export class Lobby {
   player_lobby_infos: Map<string, PlayerLobbyInfo>;
   host?: PlayerLobbyInfo;
   game?: Game;
+  max_players: number;
 
   constructor(id: string) {
     this.id = id;
     this.player_lobby_infos = new Map();
+    this.max_players = MAX_PLAYERS;
   }
 
   get_info(): LobbyInfo {
     return {
       id: this.id,
       player_count: this.player_lobby_infos.size,
+      max_players: this.max_players,
       host: this.host ? this.host?.name : "No Host",
     };
   }

@@ -4,9 +4,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircleIcon } from "lucide-react";
 import type { LobbyInfo } from "shared/lobby";
 import { MessageKinds, parseMessage } from "shared/messages";
+import { none, type Option, some } from "shared/option.ts";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert.tsx";
 import { Button } from "./components/ui/button.tsx";
 import {
@@ -18,7 +19,6 @@ import {
 
 // import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 
-// let ws: WebSocket = null;
 type Milliseconds = number;
 const REFETCH_LOBBIES_INTERVAL: Milliseconds = 5000;
 
@@ -29,12 +29,17 @@ export const RouterStates = Object.freeze({
 
 type RouterState = (typeof RouterStates)[keyof typeof RouterStates];
 
+type AppError = {
+  title: string;
+  message: string;
+};
+
 type GlobalStore = {
   router_state: RouterState;
   set_router_state: (state: RouterState) => void;
 
-  error: string;
-  set_error: (err: string) => void;
+  error: Option<AppError>;
+  set_error: (err: Option<AppError>) => void;
   name: string;
   set_name: (name: string) => void;
 };
@@ -45,7 +50,7 @@ export const useGlobalStore = create<GlobalStore>((set) => ({
     set(() => ({ router_state: state }));
   },
 
-  error: "",
+  error: none(),
   set_error(err) {
     set(() => ({ error: err }));
   },
@@ -72,13 +77,14 @@ function Home() {
     undefined,
   );
 
-  const { set_router_state, name, set_name, error } = useGlobalStore(
-    useShallow((state) => ({
-      set_router_state: state.set_router_state,
-      name: state.name,
-      set_name: state.set_name,
-      error: state.error,
-    })),
+  const [set_router_state, name, set_name, error, set_error] = useGlobalStore(
+    useShallow((state) => [
+      state.set_router_state,
+      state.name,
+      state.set_name,
+      state.error,
+      state.set_error,
+    ]),
   );
 
   useEffect(() => {
@@ -92,13 +98,17 @@ function Home() {
       .catch((e) => console.log(e));
   }, []);
 
-  // TODO: Actually create this endpoint on the server side
   const { mutate, isPending } = useMutation({
     mutationKey: ["create lobby"],
     mutationFn: async () => {
-      return await fetch("/newgame", {
+      const res = await fetch(`/newlobby?name=${encodeURIComponent(name)}`, {
         method: "POST",
-      }).then((req) => req.json());
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error);
+      }
+      return body;
     },
   });
 
@@ -122,20 +132,44 @@ function Home() {
           ></input>
         </CardContent>
       </Card>
-      <Button onClick={() => mutate()}>Create Lobby</Button>
+      <Button
+        onClick={() => {
+          set_error(none());
+          mutate(undefined, {
+            onSuccess(data) {
+              const lobby_id = data.lobby_id;
+              useLobbyStore.getState().set_lobby_id(lobby_id);
+              connect_to_lobby(lobby_id, name, () => {});
+            },
+            onError(error) {
+              set_error(
+                some({
+                  title: "Failed to create lobby",
+                  message: error.message,
+                }),
+              );
+            },
+          });
+        }}
+      >
+        Create Lobby
+      </Button>
 
       <LobbyFinder />
 
-      {error && (
-        <Alert
-          variant="destructive"
-          className="fixed top-2 left-2 w-fit animate-slide-in-right bg-red-50"
-        >
-          <AlertCircleIcon />
-          <AlertTitle>Failed to connect to lobby</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {error.match({
+        Some: (error) => (
+          <Alert
+            variant="destructive"
+            className="fixed top-2 left-2 w-fit animate-slide-in-right bg-red-50"
+          >
+            <AlertCircleIcon />
+            <AlertTitle>{error.title}</AlertTitle>
+            <AlertDescription>{error.message}</AlertDescription>
+          </Alert>
+        ),
+        None: () => <></>,
+      })}
     </div>
   );
 }
@@ -162,12 +196,17 @@ function LobbyFinder() {
   return (
     <div>
       {lobbies.map((lobby) => (
-        <div key={lobby.id}>
-          {lobby.id} : {lobby.player_count}
-          <div>
-            <LobbyConnectButton id={lobby.id} />
-          </div>
-        </div>
+        <Card key={lobby.id}>
+          <CardHeader>
+            <b>{lobby.id}</b>
+          </CardHeader>
+          <CardContent>
+            {lobby.player_count} / {lobby.max_players} Players
+            <div>
+              <LobbyConnectButton id={lobby.id} />
+            </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
@@ -181,40 +220,54 @@ function LobbyConnectButton({ id }: { id: string }) {
       set_router_state: state.set_router_state,
     })),
   );
-  const [loading, setLoading] = useState(false);
+  const [loading, set_loading] = useState(false);
   return (
     <Button
       onClick={() => {
-        setLoading(true);
-        set_error("");
+        set_loading(true);
+        set_error(none());
 
-        useLobbyStore.getState().set_lobby_id(id);
-        const socket = new WebSocket(
-          gameSocketUrl(useLobbyStore.getState().lobby_id, name),
-        );
-        socket.onmessage = (ev) => {
-          const message = parseMessage(ev.data);
-          if (message?.kind !== MessageKinds.PLAYER_NAMES) {
-            return;
-          }
-          resolve_message(ev);
-          useLobbyStore.getState().set_name(name);
-          useLobbyStore.getState().set_game_socket(socket);
-          setLoading(false);
-          set_router_state(RouterStates.LOBBY);
-        };
-        socket.onclose = (ev) => {
-          setLoading(false);
-          if (ev.code === 1000) {
-            return;
-          }
-          set_error(ev.reason || "Failed to connect to lobby");
-        };
+        connect_to_lobby(id, name, set_loading);
       }}
     >
       {loading ? "Joining..." : "Join Game"}
     </Button>
   );
+}
+
+function connect_to_lobby(
+  id: string,
+  name: string,
+  set_loading: (loading: boolean) => void,
+) {
+  useLobbyStore.getState().set_lobby_id(id);
+  const { set_router_state, set_error } = useGlobalStore.getState();
+  const socket = new WebSocket(
+    gameSocketUrl(useLobbyStore.getState().lobby_id, name),
+  );
+  socket.onmessage = (ev) => {
+    const message = parseMessage(ev.data);
+    if (message?.kind !== MessageKinds.PLAYER_NAMES) {
+      return;
+    }
+    resolve_message(ev);
+    useLobbyStore.getState().set_name(name);
+    useLobbyStore.getState().set_game_socket(socket);
+    set_loading(false);
+    set_router_state(RouterStates.LOBBY);
+  };
+  socket.onclose = (ev) => {
+    set_loading(false);
+    if (ev.code === 1000) {
+      return;
+    }
+    set_error(
+      some({
+        title: "Failed to connect to lobby",
+        message: ev.reason || "Failed to connect to lobby",
+      }),
+    );
+  };
 }
 
 export default App;

@@ -24,14 +24,30 @@ const lobbies: Map<string, Lobby> = new Map();
 lobbies.set("default", new Lobby("default"));
 lobbies.set("cool", new Lobby("cool"));
 
-const MAX_PLAYERS = 6;
-
 app.get("/lobbies", (c) => {
   return c.json({
     lobbies: lobbies
       .values()
       .map((lobby) => lobby.get_info())
       .toArray(),
+  });
+});
+
+app.post("/newlobby", (c) => {
+  const name = c.req.query("name");
+  if (!name || name === "") {
+    return c.json({ error: "Name is required" }, 400);
+  }
+
+  let new_lobby_id = randomUUIDv7();
+  while (lobbies.get(new_lobby_id)) {
+    new_lobby_id = randomUUIDv7();
+  }
+
+  lobbies.set(new_lobby_id, new Lobby(new_lobby_id));
+
+  return c.json({
+    lobby_id: new_lobby_id,
   });
 });
 
@@ -93,7 +109,7 @@ app.use(
           return;
         }
 
-        if (lobby.player_lobby_infos.size >= MAX_PLAYERS) {
+        if (lobby.player_lobby_infos.size >= lobby.max_players) {
           ws.close(4002, "Lobby is full");
           return;
         }
