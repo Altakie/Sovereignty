@@ -1,3 +1,4 @@
+import type { LobbyInfo } from "shared/lobby";
 import {
   type ConnectMessage,
   type DisconnectMessage,
@@ -17,17 +18,22 @@ export type PlayerLobbyInfo = {
 };
 
 export class Lobby {
+  id: string;
   player_lobby_infos: Map<string, PlayerLobbyInfo>;
   host?: PlayerLobbyInfo;
   game?: Game;
 
-  constructor() {
+  constructor(id: string) {
+    this.id = id;
     this.player_lobby_infos = new Map();
-    // WARN: AI Player will temporarily be in all games
-    // const ai_player = new AISocket((clientid, message) =>
-    //   this.resolve_message(clientid, message),
-    // );
-    // this.add_player(ai_player.client_id, "Gemini", ai_player);
+  }
+
+  get_info(): LobbyInfo {
+    return {
+      id: this.id,
+      player_count: this.player_lobby_infos.size,
+      host: this.host ? this.host?.name : "No Host",
+    };
   }
 
   add_player(clientid: string, name: string, ws: MessageSink) {

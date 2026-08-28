@@ -10,6 +10,16 @@
   - Password locked lobbies
   - Combine lobby stores and router stores
   - Make game_socket be created when the connect button is clicked
+  - Lobby browser
+  - Lobbies have ids
+    - Connect to /game/:id
+      - Connection can be rejected
+    - Should work same as before if we store the lobby id/ connect to the lobby with the proper id
+    - Lobbies and games share the same socket
+    - Do our lobbies live on separate threads?
+    - Create lobby button
+      - Change lobbies to be initialed with a host
+        - Delete the lobby if there is no host
 - Actually allow player to make decisions during money phase
 
 ## Minor Features

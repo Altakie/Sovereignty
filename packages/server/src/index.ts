@@ -20,67 +20,81 @@ function getClientId(c: Context): string | undefined {
   return getCookie(c, "clientid");
 }
 
-const names: Map<string, string> = new Map();
-
-const lobby = new Lobby();
+const lobbies: Map<string, Lobby> = new Map();
+lobbies.set("default", new Lobby("default"));
+lobbies.set("cool", new Lobby("cool"));
 
 const MAX_PLAYERS = 6;
 
-app.get("/session", (c) => {
-  const clientid = getCookie(c, "clientid");
-  const player_info = clientid
-    ? lobby.game?.player_infos.find((pi) => pi.clientid === clientid)
-    : undefined;
-
-  if (!player_info) {
-    return c.json({ in_game: false });
-  }
-
-  return c.json({ in_game: true, name: player_info.player.name });
+app.get("/lobbies", (c) => {
+  return c.json({
+    lobbies: lobbies
+      .values()
+      .map((lobby) => lobby.get_info())
+      .toArray(),
+  });
 });
 
-app.put("/names", async (c) => {
-  const name = await c.req.text();
-  if (lobby.player_lobby_infos.values().some((pli) => pli.name === name)) {
-    c.status(406);
-    return c.body("Name is already taken");
-  }
-
-  if (lobby.player_lobby_infos.size >= MAX_PLAYERS) {
-    c.status(406);
-    return c.body("Lobby is full");
-  }
-
-  let clientid = getCookie(c, "clientid");
-  if (!clientid) {
-    clientid = randomUUIDv7();
-    setCookie(c, "clientid", clientid, {
-      httpOnly: true,
-    });
-  }
-
-  console.log(`Name received: ${name}`);
-  names.set(clientid, name);
-  c.status(200);
-  return c.res;
-});
+// app.get("/session", (c) => {
+//   const clientid = getCookie(c, "clientid");
+//   const player_info = clientid
+//     ? lobby.game?.player_infos.find((pi) => pi.clientid === clientid)
+//     : undefined;
+//
+//   if (!player_info) {
+//     return c.json({ in_game: false });
+//   }
+//
+//   return c.json({ in_game: true, name: player_info.player.name });
+// });
 
 app.use(
-  "/game",
+  "/game/:id",
   upgradeWebSocket((c) => {
+    const id = c.req.param("id");
+    const lobby = lobbies.get(id ? id : "");
+    if (lobby === undefined) {
+      return {
+        onOpen: (ev, ws) => {
+          ws.close(1000, "Lobby does not exist");
+          return;
+        },
+      };
+    }
+
     return {
       onOpen: async (_ev, ws) => {
         const clientid = getClientId(c);
         // Reject improper connections
         if (!clientid) {
-          ws.close(1000);
+          ws.close(4000, "Improper clientid");
           return;
         }
 
-        const name = names.get(clientid);
+        const active_player_info = lobby.game?.player_infos.find(
+          (pi) => pi.clientid === clientid,
+        );
+        if (active_player_info) {
+          lobby.add_player(clientid, active_player_info.player.name, ws);
+          console.log(`Player ${clientid} reconnected to the game`);
+          return;
+        }
+
+        const name = c.req.query("name");
         if (!name) {
-          console.log("No Name");
-          ws.close(1000);
+          ws.close(4000, "No name provided");
+          return;
+        }
+
+        if (
+          lobby.player_lobby_infos.values().some((pli) => pli.name === name)
+        ) {
+          ws.close(4001, "Name is already taken");
+          return;
+        }
+
+        if (lobby.player_lobby_infos.size >= MAX_PLAYERS) {
+          ws.close(4002, "Lobby is full");
           return;
         }
 

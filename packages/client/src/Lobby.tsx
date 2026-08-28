@@ -15,7 +15,7 @@ import {
   type SyncLogMessage,
   serializeMessage,
 } from "shared/messages";
-import { RouterStates, useRouterStore } from "./App";
+import { RouterStates, useGlobalStore } from "./App";
 import { Button } from "./components/ui/button.tsx";
 import "./App.css";
 import type { GameState, PlayerDisplayInfo, SharablePlayer } from "shared";
@@ -52,10 +52,14 @@ export const LobbyStates = Object.freeze({
 });
 
 type LobbyStore = {
+  lobby_id: string;
+  set_lobby_id: (id: string) => void;
   connected: boolean;
   set_connected: (connected: boolean) => void;
   game_socket: WebSocket | null;
   set_game_socket: (game_socket: WebSocket | null) => void;
+  name: string;
+  set_name: (name: string) => void;
   send_message: (message: Message) => void;
   player_names: string[];
   add_player_name: (name: string) => void;
@@ -97,6 +101,8 @@ type LobbyStore = {
 };
 
 export const useLobbyStore = create<LobbyStore>((set, get) => ({
+  lobby_id: "",
+  set_lobby_id: (id: string) => set(() => ({ lobby_id: id })),
   connected: false,
   set_connected: (connected: boolean) => {
     set({ connected: connected });
@@ -104,6 +110,10 @@ export const useLobbyStore = create<LobbyStore>((set, get) => ({
   game_socket: null,
   set_game_socket: (game_socket: WebSocket | null) => {
     set({ game_socket: game_socket });
+  },
+  name: "",
+  set_name: (name: string) => {
+    set({ name: name });
   },
   send_message: (message: Message) => {
     get().game_socket?.send(serializeMessage(message));
@@ -206,7 +216,7 @@ export function Lobby() {
   // const gameSocket = useGameSocket(setConnected);
   useGameSocket();
   //
-  const _set_router_state = useRouterStore((state) => state.set_router_state);
+  const _set_router_state = useGlobalStore((state) => state.set_router_state);
   //
   // const [player_names, setPlayerNames] = useState<string[]>([])
   // const [gameStarted, setGameStarted] = useState<typeof LobbyState[keyof typeof LobbyState]>(LobbyState.LOBBY)
@@ -237,7 +247,7 @@ export function Lobby() {
   }
 }
 
-function resolve_message(ev: MessageEvent) {
+export function resolve_message(ev: MessageEvent) {
   console.log(`Message: ${ev.data}`);
   const message = parseMessage(ev.data);
   if (!message) {
@@ -350,15 +360,21 @@ function resolve_message(ev: MessageEvent) {
   }
 }
 
+export function gameSocketUrl(id: string, name?: string): string {
+  return name ? `/game/${id}?name=${encodeURIComponent(name)}` : `/game/${id}`;
+}
+
+// Close codes the server uses to reject a join (as opposed to a dropped
+// connection, which should be retried).
+const REJECTED_CLOSE_CODES = new Set([4000, 4001, 4002]);
+
 function useGameSocket() {
   const set_connected = useLobbyStore((state) => state.set_connected);
-  const set_router_state = useRouterStore((state) => state.set_router_state);
+  const set_router_state = useGlobalStore((state) => state.set_router_state);
   const set_lobby_state = useLobbyStore((state) => state.set_lobby_state);
   const set_game_socket = useLobbyStore((state) => state.set_game_socket);
-  // new WebSocket('/socket')
   useEffect(() => {
-    function connect(attempt: number) {
-      const socket = new WebSocket("/game");
+    function attach(socket: WebSocket, attempt: number) {
       socket.onopen = () => {
         console.log("Joined Game!");
         set_lobby_state(LobbyStates.LOBBY);
@@ -369,26 +385,35 @@ function useGameSocket() {
       socket.onclose = (ev) => {
         set_connected(false);
         console.log(ev.code);
-        if (ev.code !== 1000) {
-          setTimeout(
-            () => connect(attempt + 1),
-            Math.min(1000 * 2 ** attempt, 30000),
-          );
+        if (ev.code === 1000 || REJECTED_CLOSE_CODES.has(ev.code)) {
+          set_router_state(RouterStates.HOME);
+          console.log(`Closed Socket on attempt ${attempt}`);
           return;
         }
 
-        set_router_state(RouterStates.HOME);
-        console.log(`Closed Socket on attempt ${attempt}`);
+        setTimeout(
+          () => connect(attempt + 1),
+          Math.min(1000 * 2 ** attempt, 30000),
+        );
       };
+    }
 
+    function connect(attempt: number) {
+      const { name, lobby_id } = useLobbyStore.getState();
+      const socket = new WebSocket(gameSocketUrl(lobby_id, name));
+      attach(socket, attempt);
       set_game_socket(socket);
     }
 
-    connect(0);
-
-    // ws.current.send(serializeMessage({
-    //   kind: MessageKind.CONNECT,
-    // }))
+    // If Home already opened and confirmed a connection, reuse it instead of
+    // opening a second one for the same clientid.
+    const existing = useLobbyStore.getState().game_socket;
+    if (existing && existing.readyState === WebSocket.OPEN) {
+      attach(existing, 0);
+      set_connected(true);
+    } else {
+      connect(0);
+    }
 
     return () => {
       console.log("Cleanup");
@@ -401,7 +426,7 @@ function LobbyView() {
   const connected = useLobbyStore((state) => state.connected);
   const player_names = useLobbyStore((state) => state.player_names);
   const kingdomCards = useLobbyStore((state) => state.kingdomCards);
-  const set_router_state = useRouterStore((state) => state.set_router_state);
+  const set_router_state = useGlobalStore((state) => state.set_router_state);
   return (
     <>
       <div className="inline-flex justify-between p-2">
@@ -415,7 +440,7 @@ function LobbyView() {
               const message: StartMessage = {
                 kind: MessageKinds.START,
                 chosen_cards: kingdomCards
-                  .filter((c) => c.val !== undefined)
+                  .filter((c) => c.is_some())
                   .map((c) => c.unwrap()),
               };
               useLobbyStore.getState().send_message(message);
@@ -551,7 +576,12 @@ function KingdomCardPicker() {
   const used_elsewhere = new Set<CardName>(
     kingdomCards
       .filter((_, i) => i !== open_slot)
-      .map((c) => c.val?.name)
+      .map((c) =>
+        c.match({
+          Some: (c) => c.name,
+          None: () => undefined,
+        }),
+      )
       .filter((name): name is CardName => name !== undefined),
   );
 
@@ -621,9 +651,7 @@ function KingdomCardSlot({
   onOpen: () => void;
   onClear: () => void;
 }) {
-  const info = card.val;
-
-  if (!info) {
+  if (card.is_none()) {
     return (
       <CardShape
         height={20}
@@ -638,6 +666,7 @@ function KingdomCardSlot({
     );
   }
 
+  const info = card.unwrap();
   return (
     <div className="relative group">
       <CardShell
