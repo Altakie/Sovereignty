@@ -185,10 +185,9 @@ export class Lobby {
     this.player_lobby_infos.delete(clientid);
 
     if (this.host.is_some_and((host) => host.clientid === clientid)) {
-      let next_player = this.player_lobby_infos.values().next().value;
-      while (next_player?.player_type !== "Human") {
-        next_player = this.player_lobby_infos.values().next().value;
-      }
+      const next_player = this.player_lobby_infos
+        .values()
+        .find((pli) => pli.player_type === PLAYER_TYPES.HUMAN);
 
       if (!next_player) {
         this.host = none();

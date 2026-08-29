@@ -141,7 +141,7 @@ app.use(
 
         lobby.remove_player(clientid);
 
-        if (lobby.player_lobby_infos.size === 0) {
+        if (lobby.host.is_none()) {
           lobbies.delete(lobby.id);
         }
       },

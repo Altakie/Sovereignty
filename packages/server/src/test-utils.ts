@@ -72,12 +72,13 @@ export function createTestGame(setup: TestGameSetup): TestGame {
   const clientids = setup.players.map((_, i) => `test-client-${i}`);
   const sinks = setup.players.map(() => new FakeSink());
 
-  const lobby = new Lobby();
+  const lobby = new Lobby("test-lobby");
   const game = new Game(
     setup.players.map((p, i) => ({
       clientid: clientids[i]!,
       name: p.name ?? `Player ${i}`,
       socket: sinks[i]!,
+      player_type: "Human" as const,
     })),
     lobby,
     [],
