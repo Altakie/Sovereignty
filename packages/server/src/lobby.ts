@@ -8,21 +8,29 @@ import {
   type StartMessage,
   serializeMessage,
 } from "shared/messages";
+import { none, type Option, some } from "shared/option";
 import { Game } from "./game";
 import { AISocket, type MessageSink } from "./socket";
 
 const MAX_PLAYERS = 6;
 
+const PLAYER_TYPES = Object.freeze({
+  AI: "AI",
+  HUMAN: "Human",
+});
+type PlayerType = (typeof PLAYER_TYPES)[keyof typeof PLAYER_TYPES];
+
 export type PlayerLobbyInfo = {
   clientid: string;
   socket: MessageSink;
   name: string;
+  player_type: PlayerType;
 };
 
 export class Lobby {
   id: string;
   player_lobby_infos: Map<string, PlayerLobbyInfo>;
-  host?: PlayerLobbyInfo;
+  host: Option<PlayerLobbyInfo>;
   game?: Game;
   max_players: number;
 
@@ -30,6 +38,7 @@ export class Lobby {
     this.id = id;
     this.player_lobby_infos = new Map();
     this.max_players = MAX_PLAYERS;
+    this.host = none();
   }
 
   get_info(): LobbyInfo {
@@ -37,19 +46,26 @@ export class Lobby {
       id: this.id,
       player_count: this.player_lobby_infos.size,
       max_players: this.max_players,
-      host: this.host ? this.host?.name : "No Host",
+      host: this.host.map((host) => host.name).unwrap_or_else(() => "No Host"),
     };
   }
 
-  add_player(clientid: string, name: string, ws: MessageSink) {
-    const player_lobby_info = {
+  add_player(
+    clientid: string,
+    name: string,
+    ws: MessageSink,
+    player_type?: PlayerType,
+  ) {
+    const player_lobby_info: PlayerLobbyInfo = {
       name: name,
       clientid: clientid,
       socket: ws,
+      player_type: player_type ? player_type : PLAYER_TYPES.HUMAN,
     };
+
     this.player_lobby_infos.set(clientid, player_lobby_info);
     if (this.player_lobby_infos.size === 1) {
-      this.host = player_lobby_info;
+      this.host = some(player_lobby_info);
     }
 
     // Check if there is a game going on and if the player is in it, send them a game started message
@@ -103,7 +119,7 @@ export class Lobby {
     const ai_player = new AISocket((clientid, message) =>
       this.resolve_message(clientid, message),
     );
-    this.add_player(ai_player.client_id, "Gemini", ai_player);
+    this.add_player(ai_player.client_id, "Gemini", ai_player, PLAYER_TYPES.AI);
   }
 
   resolve_message(clientid: string, message: Message) {
@@ -135,7 +151,7 @@ export class Lobby {
         this.add_ai_player();
         break;
       case MessageKinds.KICK_PLAYER:
-        if (this.host === undefined || clientid !== this.host?.clientid) {
+        if (!this.host.is_some_and((host) => host.clientid === clientid)) {
           break;
         }
         // TODO: Tell the player they've been kicked
@@ -168,12 +184,17 @@ export class Lobby {
 
     this.player_lobby_infos.delete(clientid);
 
-    if (clientid === this.host?.clientid) {
-      const next_player = this.player_lobby_infos.values().next().value;
-      if (next_player?.name !== "Gemini") {
-        this.host = next_player;
+    if (this.host.is_some_and((host) => host.clientid === clientid)) {
+      let next_player = this.player_lobby_infos.values().next().value;
+      while (next_player?.player_type !== "Human") {
+        next_player = this.player_lobby_infos.values().next().value;
+      }
+
+      if (!next_player) {
+        this.host = none();
+        return;
       } else {
-        this.host = undefined;
+        this.host = some(next_player);
       }
     }
 

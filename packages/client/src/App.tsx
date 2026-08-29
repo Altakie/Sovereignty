@@ -198,7 +198,7 @@ function LobbyFinder() {
       {lobbies.map((lobby) => (
         <Card key={lobby.id}>
           <CardHeader>
-            <b>{lobby.id}</b>
+            <b>{lobby.host}'s Table</b>
           </CardHeader>
           <CardContent>
             {lobby.player_count} / {lobby.max_players} Players

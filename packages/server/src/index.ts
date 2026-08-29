@@ -21,8 +21,6 @@ function getClientId(c: Context): string | undefined {
 }
 
 const lobbies: Map<string, Lobby> = new Map();
-lobbies.set("default", new Lobby("default"));
-lobbies.set("cool", new Lobby("cool"));
 
 app.get("/lobbies", (c) => {
   return c.json({
@@ -140,6 +138,10 @@ app.use(
         }
 
         lobby.remove_player(clientid);
+
+        if (lobby.player_lobby_infos.size === 0) {
+          lobbies.delete(lobby.id);
+        }
       },
     };
   }),
