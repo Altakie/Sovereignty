@@ -19,9 +19,9 @@ export class FakeSink implements MessageSink {
   messages: Message[] = [];
 
   send(message: string) {
-    const parsed = parseMessage(message);
-    if (parsed !== undefined) {
-      this.messages.push(parsed);
+    const result = parseMessage(message);
+    if (result.success) {
+      this.messages.push(result.data);
     }
   }
 }

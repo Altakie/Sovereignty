@@ -19,7 +19,7 @@ import { RouterStates, useGlobalStore } from "./App";
 import { Button } from "./components/ui/button.tsx";
 import "./App.css";
 import type { GameState, PlayerDisplayInfo, SharablePlayer } from "shared";
-import { BaseCards } from "shared/cards/base";
+import { BaseKingdomCards } from "shared/cards/base";
 import type { Card, CardInfo, CardName } from "shared/cards.ts";
 import type { LogEntry, Turn } from "shared/log.ts";
 import { none, type Option, some } from "shared/option.ts";
@@ -247,10 +247,12 @@ export function Lobby() {
 
 export function resolve_message(ev: MessageEvent) {
   console.log(`Message: ${ev.data}`);
-  const message = parseMessage(ev.data);
-  if (!message) {
+  const result = parseMessage(ev.data);
+  if (!result.success) {
+    console.error(`Rejected message from server: ${result.error.message}`);
     return;
   }
+  const message = result.data;
 
   const {
     lobby_state,
@@ -297,7 +299,7 @@ export function resolve_message(ev: MessageEvent) {
     case MessageKinds.STARTED: {
       const started_msg = message as StartedMessage;
       set_player_game_infos(started_msg.players);
-      set_game_state(started_msg.state);
+      set_game_state(started_msg.state as GameState);
       set_player(started_msg.player);
 
       set_lobby_state(LobbyStates.GAME_STARTED);
@@ -325,7 +327,7 @@ export function resolve_message(ev: MessageEvent) {
     case MessageKinds.GAME_STATE_UPDATE: {
       const update_message: GameStateUpdateMessage =
         message as GameStateUpdateMessage;
-      set_game_state(update_message.game_state);
+      set_game_state(update_message.game_state as GameState);
       set_player(update_message.player);
       set_player_game_infos(update_message.players);
 
@@ -608,7 +610,7 @@ function KingdomCardPicker() {
             <DialogTitle>Choose a Kingdom Card</DialogTitle>
           </DialogHeader>
           <div className="flex flex-row flex-wrap justify-center gap-2 max-h-[70vh] overflow-y-auto p-2">
-            {BaseCards.map((c) => {
+            {Object.values(BaseKingdomCards).map((c) => {
               const disabled = used_elsewhere.has(c.name);
               return (
                 <CardShell

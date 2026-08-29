@@ -246,8 +246,12 @@ function connect_to_lobby(
     gameSocketUrl(useLobbyStore.getState().lobby_id, name),
   );
   socket.onmessage = (ev) => {
-    const message = parseMessage(ev.data);
-    if (message?.kind !== MessageKinds.PLAYER_NAMES) {
+    const result = parseMessage(ev.data);
+    if (!result.success) {
+      console.error(`Rejected message from server: ${result.error.message}`);
+      return;
+    }
+    if (result.data.kind !== MessageKinds.PLAYER_NAMES) {
       return;
     }
     resolve_message(ev);

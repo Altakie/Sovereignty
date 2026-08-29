@@ -1,16 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  Artisan,
-  Chapel,
-  CouncilRoom,
-  Gardens,
-  Merchant,
-  Militia,
-  Moat,
-  Sentry,
-  Smithy,
-  Village,
-} from "shared/cards/base";
+import { BaseKingdomCards } from "shared/cards/base";
 import { Curse } from "shared/cards/curses";
 import { Copper, Gold, Silver } from "shared/cards/treasures";
 import { Duchy, Estate, Province } from "shared/cards/victories";
@@ -158,7 +147,7 @@ describe("Witch", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [
         { hand: [], deck: [] },
-        { hand: [Moat], deck: [] },
+        { hand: [BaseKingdomCards.Moat], deck: [] },
       ],
     });
     const opponent = getPlayer(game, clientids[1]!);
@@ -185,7 +174,7 @@ describe("Witch", () => {
     const { game, clientids } = createTestGame({
       players: [
         { hand: [], deck: [] },
-        { hand: [Moat], deck: [] },
+        { hand: [BaseKingdomCards.Moat], deck: [] },
       ],
     });
     const opponent = getPlayer(game, clientids[1]!);
@@ -258,8 +247,8 @@ describe("Silver", () => {
 
   test("gives +1 additional money per Merchant already in play", () => {
     const { game } = createTestGame({ players: [{}] });
-    const merchant1 = game.new_card(Merchant);
-    const merchant2 = game.new_card(Merchant);
+    const merchant1 = game.new_card(BaseKingdomCards.Merchant);
+    const merchant2 = game.new_card(BaseKingdomCards.Merchant);
     const silver = game.new_card(Silver);
     game.game_state.played_cards = [merchant1, merchant2, silver];
 
@@ -271,7 +260,7 @@ describe("Silver", () => {
   test("skips the Merchant bonus when a Silver was already played earlier this turn", () => {
     const { game } = createTestGame({ players: [{}] });
     const earlier_silver = game.new_card(Silver);
-    const merchant = game.new_card(Merchant);
+    const merchant = game.new_card(BaseKingdomCards.Merchant);
     const this_silver = game.new_card(Silver);
     game.game_state.played_cards = [earlier_silver, merchant, this_silver];
 
@@ -298,7 +287,13 @@ describe("Victory and Curse cards", () => {
     const starting_money = game.game_state.money;
     const starting_buys = game.game_state.buys;
 
-    for (const card of [Estate, Duchy, Province, Gardens, Curse]) {
+    for (const card of [
+      Estate,
+      Duchy,
+      Province,
+      BaseKingdomCards.Gardens,
+      Curse,
+    ]) {
       expect(() => effect_table[card.name](game)).not.toThrow();
     }
 
@@ -647,7 +642,9 @@ describe("Vassal", () => {
 
   test("plays the discarded Action card when the player accepts", () => {
     const { game, sinks, clientids } = createTestGame({
-      players: [{ hand: [], deck: [Copper, Copper, Copper, Smithy] }],
+      players: [
+        { hand: [], deck: [Copper, Copper, Copper, BaseKingdomCards.Smithy] },
+      ],
     });
     const player = getPlayer(game, clientids[0]!);
 
@@ -674,7 +671,7 @@ describe("Vassal", () => {
 
   test("leaves the discarded Action card in the discard pile when the player declines", () => {
     const { game, clientids } = createTestGame({
-      players: [{ hand: [], deck: [Smithy] }],
+      players: [{ hand: [], deck: [BaseKingdomCards.Smithy] }],
     });
     const player = getPlayer(game, clientids[0]!);
 
@@ -744,7 +741,7 @@ describe("Workshop", () => {
   test("does nothing when no supply pile costs 4 or less", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [{ hand: [] }],
-      kingdomCards: [CouncilRoom],
+      kingdomCards: [BaseKingdomCards["Council Room"]],
     });
     for (const name of ["Copper", "Silver", "Estate", "Curse"]) {
       game.game_state.supply.fixed_stacks.find(
@@ -977,7 +974,7 @@ describe("Remodel", () => {
   test("gains nothing when nothing in the supply costs within budget after trashing", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [{ hand: [Copper] }],
-      kingdomCards: [CouncilRoom],
+      kingdomCards: [BaseKingdomCards["Council Room"]],
     });
     for (const name of ["Copper", "Estate", "Curse"]) {
       game.game_state.supply.fixed_stacks.find(
@@ -1180,7 +1177,7 @@ describe("Artisan", () => {
   test("gains nothing but still requires putting a card from hand onto the deck when no supply pile costs 5 or less", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [{ hand: [Estate], deck: [] }],
-      kingdomCards: [Artisan],
+      kingdomCards: [BaseKingdomCards.Artisan],
     });
     for (const name of ["Copper", "Silver", "Estate", "Curse", "Duchy"]) {
       game.game_state.supply.fixed_stacks.find(
@@ -1275,7 +1272,7 @@ describe("Bureaucrat", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [
         { hand: [], deck: [] },
-        { hand: [Estate, Moat], deck: [] },
+        { hand: [Estate, BaseKingdomCards.Moat], deck: [] },
       ],
     });
     const opponent = getPlayer(game, clientids[1]!);
@@ -1433,7 +1430,10 @@ describe("Militia", () => {
 
   test("Moat blocks the forced discard", () => {
     const { game, clientids } = createTestGame({
-      players: [{ hand: [] }, { hand: [Copper, Copper, Copper, Copper, Moat] }],
+      players: [
+        { hand: [] },
+        { hand: [Copper, Copper, Copper, Copper, BaseKingdomCards.Moat] },
+      ],
     });
     const opponent = getPlayer(game, clientids[1]!);
     const moat = opponent.hand.find((c) => c.info.name === "Moat")!;
@@ -1870,7 +1870,7 @@ describe("Bandit", () => {
     const { game, clientids } = createTestGame({
       players: [
         { hand: [], deck: [] },
-        { hand: [Moat], deck: [Silver, Gold] },
+        { hand: [BaseKingdomCards.Moat], deck: [Silver, Gold] },
       ],
     });
     const opponent = getPlayer(game, clientids[1]!);
@@ -1891,7 +1891,7 @@ describe("Bandit", () => {
 describe("Throne Room", () => {
   test("does nothing when no action card is chosen", () => {
     const { game, clientids } = createTestGame({
-      players: [{ hand: [Village, Copper], deck: [] }],
+      players: [{ hand: [BaseKingdomCards.Village, Copper], deck: [] }],
     });
     const player = getPlayer(game, clientids[0]!);
 
@@ -1907,7 +1907,7 @@ describe("Throne Room", () => {
 
   test("plays a no-prompt action card twice", () => {
     const { game, clientids } = createTestGame({
-      players: [{ hand: [Village], deck: [Copper, Copper] }],
+      players: [{ hand: [BaseKingdomCards.Village], deck: [Copper, Copper] }],
     });
     const player = getPlayer(game, clientids[0]!);
     const starting_actions = game.game_state.actions;
@@ -1928,7 +1928,9 @@ describe("Throne Room", () => {
 
   test("re-prompts for a choice-driven action card on both plays", () => {
     const { game, sinks, clientids } = createTestGame({
-      players: [{ hand: [Chapel, Copper, Copper, Copper, Copper], deck: [] }],
+      players: [
+        { hand: [BaseKingdomCards.Chapel, Copper, Copper, Copper, Copper], deck: [] },
+      ],
     });
     const player = getPlayer(game, clientids[0]!);
     const chapel = player.hand.find((c) => c.info.name === "Chapel")!;
@@ -1966,8 +1968,17 @@ describe("Throne Room", () => {
   test("replays an Attack card, letting Moat block each attack instance independently", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [
-        { hand: [Militia], deck: [] },
-        { hand: [Moat, Copper, Copper, Copper, Copper], deck: [] },
+        { hand: [BaseKingdomCards.Militia], deck: [] },
+        {
+          hand: [
+            BaseKingdomCards.Moat,
+            Copper,
+            Copper,
+            Copper,
+            Copper,
+          ],
+          deck: [],
+        },
       ],
     });
     const player = getPlayer(game, clientids[0]!);
@@ -2010,7 +2021,7 @@ describe("Throne Room", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [
         {
-          hand: [Sentry],
+          hand: [BaseKingdomCards.Sentry],
           deck: [Duchy, Copper, Gold, Estate, Silver, Province],
         },
       ],
@@ -2140,7 +2151,7 @@ describe("Library", () => {
 
   test("sets aside a skipped Action card and discards it once resolution ends", () => {
     const { game, sinks, clientids } = createTestGame({
-      players: [{ hand: [], deck: [Copper, Smithy] }],
+      players: [{ hand: [], deck: [Copper, BaseKingdomCards.Smithy] }],
     });
     const player = getPlayer(game, clientids[0]!);
 
@@ -2161,7 +2172,7 @@ describe("Library", () => {
 
   test("keeps an accepted Action card in hand instead of setting it aside", () => {
     const { game, sinks, clientids } = createTestGame({
-      players: [{ hand: [], deck: [Copper, Smithy] }],
+      players: [{ hand: [], deck: [Copper, BaseKingdomCards.Smithy] }],
     });
     const player = getPlayer(game, clientids[0]!);
 
@@ -2210,7 +2221,12 @@ describe("Library", () => {
     // deck (bottom -> top): Copper, Smithy, Village. Village and Smithy are
     // drawn (and skipped) first, then Copper is drawn last.
     const { game, sinks, clientids } = createTestGame({
-      players: [{ hand: [], deck: [Copper, Smithy, Village] }],
+      players: [
+        {
+          hand: [],
+          deck: [Copper, BaseKingdomCards.Smithy, BaseKingdomCards.Village],
+        },
+      ],
     });
     const player = getPlayer(game, clientids[0]!);
 

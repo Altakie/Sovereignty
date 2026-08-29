@@ -122,14 +122,16 @@ app.use(
         if (!clientid) {
           return;
         }
-        const message = parseMessage(ev.data.toString());
-        if (!message) {
-          console.log("Message rejected");
+        const result = parseMessage(ev.data.toString());
+        if (!result.success) {
+          console.warn(
+            `Rejected message from ${clientid}: ${result.error.message}`,
+          );
           return;
         }
 
         // NOTE: This is where player responses are resolved, other messages are resolved below
-        lobby.resolve_message(clientid, message);
+        lobby.resolve_message(clientid, result.data);
       },
       onClose: async () => {
         const clientid = getClientId(c);

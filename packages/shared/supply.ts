@@ -1,14 +1,5 @@
 import { type Card, type CardInfo, CardTypes } from "./cards";
-import {
-  Bandit,
-  BaseCards,
-  Bureaucrat,
-  Chapel,
-  Merchant,
-  Militia,
-  Moat,
-  Witch,
-} from "./cards/base";
+import { BaseKingdomCards } from "./cards/base";
 import { Curse } from "./cards/curses";
 import { Copper, Gold, Silver } from "./cards/treasures";
 import { Duchy, Estate, Province } from "./cards/victories";
@@ -53,7 +44,7 @@ export class Supply {
 
     const kingdomCards = chosen_cards;
 
-    const allCards: CardInfo[] = shuffle(Object.values(BaseCards));
+    const allCards: CardInfo[] = shuffle(Object.values(BaseKingdomCards));
 
     let i = 0;
     while (kingdomCards.length < 10) {
@@ -95,13 +86,13 @@ export class Supply {
 
   toggleDebugMode() {
     this.stacks = [
-      { card: Chapel, count: 1 },
-      { card: Moat, count: 1 },
-      { card: Merchant, count: 1 },
-      { card: Witch, count: 10 },
-      { card: Bandit, count: 10 },
-      { card: Bureaucrat, count: 10 },
-      { card: Militia, count: 10 },
+      { card: BaseKingdomCards.Chapel, count: 1 },
+      { card: BaseKingdomCards.Moat, count: 1 },
+      { card: BaseKingdomCards.Merchant, count: 1 },
+      { card: BaseKingdomCards.Witch, count: 10 },
+      { card: BaseKingdomCards.Bandit, count: 10 },
+      { card: BaseKingdomCards.Bureaucrat, count: 10 },
+      { card: BaseKingdomCards.Militia, count: 10 },
     ];
   }
 }

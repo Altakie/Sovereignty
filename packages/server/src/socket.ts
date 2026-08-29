@@ -5,6 +5,7 @@ import {
   type GameStateUpdateMessage,
   type Message,
   MessageKinds,
+  MessageSchema,
   type PickCardsRequest,
   type PickCardsResponse,
   type PickSupplyPileRequest,
@@ -12,8 +13,23 @@ import {
   type PickYesNoResponse,
   parseMessage,
   type StartedMessage,
-  serializeMessage,
 } from "shared/messages";
+
+function random_sample<T>(items: T[], count: number): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled.slice(0, count);
+}
+
+function random_subset<T>(items: T[], min: number, max: number): T[] {
+  const upper = Math.min(max, items.length);
+  const lower = Math.min(min, upper);
+  const count = lower + Math.floor(Math.random() * (upper - lower + 1));
+  return random_sample(items, count);
+}
 
 export interface MessageSink {
   send: (message: string) => void;
@@ -49,20 +65,22 @@ export class AISocket implements MessageSink {
   }
 
   send(msg: string) {
-    const message = parseMessage(msg);
-    if (message === undefined) {
+    const result = parseMessage(msg);
+    if (!result.success) {
+      console.warn(`AISocket rejected message: ${result.error.message}`);
       return;
     }
+    const message = result.data;
     switch (message.kind) {
       case MessageKinds.STARTED: {
         const started_message = message as StartedMessage;
-        this.game_state = started_message.state;
+        this.game_state = started_message.state as GameState;
         this.player = started_message.player;
         return;
       }
       case MessageKinds.GAME_STATE_UPDATE: {
         const update_msg = message as GameStateUpdateMessage;
-        this.game_state = update_msg.game_state;
+        this.game_state = update_msg.game_state as GameState;
         this.player = update_msg.player;
         return;
       }
@@ -167,13 +185,13 @@ export class AISocket implements MessageSink {
     try {
       const res = JSON.parse(interaction.output_text!);
 
+      let response: Message | undefined;
       switch (message.kind) {
         case MessageKinds.PICK_YES_NO_REQUEST: {
-          const bool_response: PickYesNoResponse = {
+          response = {
             kind: MessageKinds.PICK_YES_NO_RESPONSE,
             choice: res.choice,
           };
-          this.on_response(this.client_id, bool_response);
           break;
         }
         case MessageKinds.PICK_SUPPLY_PILE_REQUEST: {
@@ -184,12 +202,10 @@ export class AISocket implements MessageSink {
                 choice_index % pick_supply_req.choices.length
               ]!,
           );
-          const pick_supply_res: PickSupplyPileResponse = {
+          response = {
             kind: MessageKinds.PICK_SUPPLY_PILE_RESPONSE,
             choices: choices,
           };
-          console.log(`Ai will send ${serializeMessage(pick_supply_res)}`);
-          this.on_response(this.client_id, pick_supply_res);
           break;
         }
         case MessageKinds.PICK_CARDS_REQUEST: {
@@ -202,13 +218,24 @@ export class AISocket implements MessageSink {
               ]!,
           );
 
-          const pick_cards_res: PickCardsResponse = {
+          response = {
             kind: MessageKinds.PICK_CARDS_RESPONSE,
             choices: choices,
           };
-          this.on_response(this.client_id, pick_cards_res);
           break;
         }
+      }
+
+      const validated = response && MessageSchema.safeParse(response);
+      if (validated?.success) {
+        this.on_response(this.client_id, validated.data);
+      } else {
+        if (validated) {
+          console.warn(
+            `AI produced an invalid ${message.kind} response, falling back to a random choice: ${validated.error.message}`,
+          );
+        }
+        this.on_response(this.client_id, this.pick_random_choice(message)!);
       }
     } catch {
       this.on_response(this.client_id, this.pick_random_choice(message)!);
@@ -222,7 +249,7 @@ export class AISocket implements MessageSink {
         const req = message as PickCardsRequest;
         const res: PickCardsResponse = {
           kind: MessageKinds.PICK_CARDS_RESPONSE,
-          choices: req.choices.slice(0, req.min),
+          choices: random_subset(req.choices, req.min, req.max),
         };
 
         return res;
@@ -231,7 +258,7 @@ export class AISocket implements MessageSink {
         const req = message as PickSupplyPileRequest;
         const res: PickSupplyPileResponse = {
           kind: MessageKinds.PICK_SUPPLY_PILE_RESPONSE,
-          choices: req.choices.slice(0, req.min),
+          choices: random_subset(req.choices, req.min, req.max),
         };
 
         return res;
@@ -239,7 +266,7 @@ export class AISocket implements MessageSink {
       case MessageKinds.PICK_YES_NO_REQUEST: {
         const res: PickYesNoResponse = {
           kind: MessageKinds.PICK_YES_NO_RESPONSE,
-          choice: false,
+          choice: Math.random() < 0.5,
         };
         return res;
       }

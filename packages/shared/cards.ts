@@ -1,4 +1,4 @@
-import type { BaseName } from "./cards/base";
+import type { BaseKingdomCardName } from "./cards/base";
 import type { CurseName } from "./cards/curses";
 import type { TreasureName } from "./cards/treasures";
 import type { VictoryName } from "./cards/victories";
@@ -29,4 +29,8 @@ export const CardTypes = Object.freeze({
 
 type CardType = (typeof CardTypes)[keyof typeof CardTypes];
 
-export type CardName = BaseName | TreasureName | VictoryName | CurseName;
+export type CardName =
+  | BaseKingdomCardName
+  | TreasureName
+  | VictoryName
+  | CurseName;

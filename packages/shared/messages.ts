@@ -1,16 +1,17 @@
-import type {
-  GameState,
-  PlayerDisplayInfo,
-  PlayerEndInfo,
-  SharablePlayer,
+import { z } from "zod";
+import {
+  GamePhases,
+  type PlayerDisplayInfo,
+  type PlayerEndInfo,
+  type SharablePlayer,
 } from ".";
-import type { Card, CardInfo } from "./cards";
-import type {
-  BinaryDescription,
-  GainDescription,
-  PickCardsDescription,
+import { type Card, type CardInfo, type CardName, CardTypes } from "./cards";
+import {
+  BinaryDescriptions,
+  GainDescriptions,
+  PickCardsDescriptions,
 } from "./effect_descriptions";
-import type { LogEntry, Turn } from "./log";
+import { type LogEntry, LogEventKinds, type Turn } from "./log";
 import type { supplyStack } from "./supply";
 
 export const MessageKinds = Object.freeze({
@@ -43,150 +44,283 @@ export const MessageKinds = Object.freeze({
 
 type MessageKind = (typeof MessageKinds)[keyof typeof MessageKinds];
 
-export interface Message {
-  kind: MessageKind;
-}
+const CardInfoSchema: z.ZodType<CardInfo> = z.object({
+  name: z.string() as unknown as z.ZodType<CardName>,
+  types: z.array(z.enum(CardTypes)),
+  cost: z.number(),
+});
 
-export interface ConnectMessage extends Message {
-  kind: typeof MessageKinds.CONNECT;
-  player_name: string;
-}
+const CardSchema: z.ZodType<Card> = z.object({
+  id: z.string(),
+  info: CardInfoSchema,
+});
 
-export interface KickPlayerMessage extends Message {
-  kind: typeof MessageKinds.KICK_PLAYER;
-  player_name: string;
-}
+const SupplyStackSchema: z.ZodType<supplyStack> = z.object({
+  card: CardInfoSchema,
+  count: z.number(),
+});
 
-export interface AddAIPlayerMessage extends Message {
-  kind: typeof MessageKinds.ADD_AI_PLAYER;
-}
+const SupplySchema = z.object({
+  fixed_stacks: z.array(SupplyStackSchema),
+  stacks: z.array(SupplyStackSchema),
+});
 
-export interface DisconnectMessage extends Message {
-  kind: typeof MessageKinds.DISCONNECT;
-  player_name: string;
-}
+const BaseLogEntrySchema = z.object({
+  player_name: z.string(),
+});
 
-export interface PlayerNamesMessage extends Message {
-  kind: typeof MessageKinds.PLAYER_NAMES;
-  player_names: string[];
-}
+const LogEntrySchema: z.ZodType<LogEntry> = z.discriminatedUnion("kind", [
+  BaseLogEntrySchema.extend({
+    kind: z.enum([
+      LogEventKinds.PLAYED,
+      LogEventKinds.DISCARDED,
+      LogEventKinds.GAINED,
+      LogEventKinds.TRASHED,
+    ]),
+    cards: z.array(CardInfoSchema),
+  }),
+  BaseLogEntrySchema.extend({
+    kind: z.literal(LogEventKinds.DREW),
+    count: z.number(),
+  }),
+  BaseLogEntrySchema.extend({
+    kind: z.literal(LogEventKinds.NO_CARDS_TO_DISCARD),
+  }),
+  BaseLogEntrySchema.extend({
+    kind: z.literal(LogEventKinds.REVEALED_REACTION),
+    card: CardInfoSchema,
+  }),
+]);
 
-export interface StartMessage extends Message {
-  kind: typeof MessageKinds.START;
-  chosen_cards: CardInfo[];
-}
+const TurnSchema: z.ZodType<Turn> = z.object({
+  active_player_name: z.string(),
+  turn_number: z.number(),
+  events: z.array(LogEntrySchema),
+});
 
-export interface StartedMessage extends Message {
-  kind: typeof MessageKinds.STARTED;
-  players: PlayerDisplayInfo[];
-  state: GameState;
+const SharablePlayerSchema: z.ZodType<SharablePlayer> = z.object({
+  name: z.string(),
+  hand: z.array(CardSchema),
+  deck_size: z.number(),
+  top_of_discard_pile: CardSchema.optional(),
+  discard_pile_size: z.number(),
+  victory_points: z.number(),
+});
 
-  player: SharablePlayer;
-}
+const PlayerDisplayInfoSchema: z.ZodType<PlayerDisplayInfo> = z.object({
+  name: z.string(),
+  total_cards: z.number(),
+  victory_points: z.number(),
+});
+
+const PlayerEndInfoSchema: z.ZodType<PlayerEndInfo> = z.object({
+  name: z.string(),
+  victory_points: z.number(),
+  final_deck: z.array(CardSchema),
+});
+
+const GameStateSchema = z.object({
+  phase: z.enum(GamePhases),
+  current_player_index: z.number(),
+  turn_number: z.number(),
+
+  attack_index: z.number().nullable(),
+
+  played_cards: z.array(CardSchema),
+  set_aside_cards: z.array(CardSchema),
+
+  supply: SupplySchema,
+  trash_pile: z.array(CardSchema),
+
+  actions: z.number(),
+  money: z.number(),
+  buys: z.number(),
+});
+
+const BaseMessageSchema = z.object({});
+
+const ConnectMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.CONNECT),
+  player_name: z.string(),
+});
+
+const KickPlayerMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.KICK_PLAYER),
+  player_name: z.string(),
+});
+
+const AddAIPlayerMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.ADD_AI_PLAYER),
+});
+
+const DisconnectMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.DISCONNECT),
+  player_name: z.string(),
+});
+
+const PlayerNamesMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PLAYER_NAMES),
+  player_names: z.array(z.string()),
+});
+
+const StartMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.START),
+  chosen_cards: z.array(CardInfoSchema),
+});
+
+const StartedMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.STARTED),
+  players: z.array(PlayerDisplayInfoSchema),
+  state: GameStateSchema,
+  player: SharablePlayerSchema,
+});
 
 export const request_message_kinds = new Set<MessageKind>();
 request_message_kinds.add(MessageKinds.PICK_CARDS_REQUEST);
 request_message_kinds.add(MessageKinds.PICK_SUPPLY_PILE_REQUEST);
 request_message_kinds.add(MessageKinds.PICK_YES_NO_REQUEST);
 
-export interface RequestMessage extends Message {
-  kind: MessageKind;
+const PickCardsRequestSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PICK_CARDS_REQUEST),
+  description: z.enum(PickCardsDescriptions),
+  choices: z.array(CardSchema),
+  min: z.number(),
+  max: z.number(),
+});
 
-  description: string;
-}
+const PickSupplyPileRequestSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PICK_SUPPLY_PILE_REQUEST),
+  description: z.enum(GainDescriptions),
+  choices: z.array(SupplyStackSchema),
+  min: z.number(),
+  max: z.number(),
+});
 
-export interface PickCardsRequest extends RequestMessage {
-  kind: typeof MessageKinds.PICK_CARDS_REQUEST;
+const PickYesNoRequestSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PICK_YES_NO_REQUEST),
+  description: z.enum(BinaryDescriptions),
+  card: CardSchema,
+});
 
-  description: PickCardsDescription;
+const PickCardsResponseSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PICK_CARDS_RESPONSE),
+  choices: z.array(CardSchema),
+});
 
-  choices: Card[];
-  min: number;
-  max: number;
-}
+const PickSupplyPileResponseSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PICK_SUPPLY_PILE_RESPONSE),
+  choices: z.array(SupplyStackSchema),
+});
 
-export interface PickSupplyPileRequest extends RequestMessage {
-  kind: typeof MessageKinds.PICK_SUPPLY_PILE_REQUEST;
+const PickYesNoResponseSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.PICK_YES_NO_RESPONSE),
+  choice: z.boolean(),
+});
 
-  description: GainDescription;
+const GameStateUpdateMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.GAME_STATE_UPDATE),
+  game_state: GameStateSchema,
+  player: SharablePlayerSchema,
+  players: z.array(PlayerDisplayInfoSchema),
+});
 
-  choices: supplyStack[];
-  min: number;
-  max: number;
-}
+const GameEndMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.GAME_END),
+  winner_indices: z.array(z.number()),
+  players_end_infos_in_victory_order: z.array(PlayerEndInfoSchema),
+});
 
-export interface PickYesNoRequest extends RequestMessage {
-  kind: typeof MessageKinds.PICK_YES_NO_REQUEST;
+const LogEventMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.LOG_EVENT),
+  log_messages: z.array(LogEntrySchema),
+});
 
-  description: BinaryDescription;
+const NewLogTurnMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.NEW_TURN),
+  turn: TurnSchema,
+});
 
-  card: Card;
-}
+const SyncLogMessageSchema = BaseMessageSchema.extend({
+  kind: z.literal(MessageKinds.SYNC_LOG),
+  log: z.array(TurnSchema),
+});
 
-export interface PickCardsResponse extends Message {
-  kind: typeof MessageKinds.PICK_CARDS_RESPONSE;
+export const MessageSchema = z.discriminatedUnion("kind", [
+  ConnectMessageSchema,
+  KickPlayerMessageSchema,
+  AddAIPlayerMessageSchema,
+  DisconnectMessageSchema,
+  PlayerNamesMessageSchema,
+  StartMessageSchema,
+  StartedMessageSchema,
+  PickCardsRequestSchema,
+  PickSupplyPileRequestSchema,
+  PickYesNoRequestSchema,
+  PickCardsResponseSchema,
+  PickSupplyPileResponseSchema,
+  PickYesNoResponseSchema,
+  GameStateUpdateMessageSchema,
+  GameEndMessageSchema,
+  LogEventMessageSchema,
+  NewLogTurnMessageSchema,
+  SyncLogMessageSchema,
+]);
 
-  choices: Card[];
-}
+export type Message = z.infer<typeof MessageSchema>;
 
-export interface PickSupplyPileResponse extends Message {
-  kind: typeof MessageKinds.PICK_SUPPLY_PILE_RESPONSE;
+export type ConnectMessage = z.infer<typeof ConnectMessageSchema>;
+export type KickPlayerMessage = z.infer<typeof KickPlayerMessageSchema>;
+export type AddAIPlayerMessage = z.infer<typeof AddAIPlayerMessageSchema>;
+export type DisconnectMessage = z.infer<typeof DisconnectMessageSchema>;
+export type PlayerNamesMessage = z.infer<typeof PlayerNamesMessageSchema>;
+export type StartMessage = z.infer<typeof StartMessageSchema>;
+export type StartedMessage = z.infer<typeof StartedMessageSchema>;
+export type PickCardsRequest = z.infer<typeof PickCardsRequestSchema>;
+export type PickSupplyPileRequest = z.infer<typeof PickSupplyPileRequestSchema>;
+export type PickYesNoRequest = z.infer<typeof PickYesNoRequestSchema>;
+export type PickCardsResponse = z.infer<typeof PickCardsResponseSchema>;
+export type PickSupplyPileResponse = z.infer<
+  typeof PickSupplyPileResponseSchema
+>;
+export type PickYesNoResponse = z.infer<typeof PickYesNoResponseSchema>;
+export type GameStateUpdateMessage = z.infer<
+  typeof GameStateUpdateMessageSchema
+>;
+export type GameEndMessage = z.infer<typeof GameEndMessageSchema>;
+export type LogEventMessage = z.infer<typeof LogEventMessageSchema>;
+export type NewLogTurnMessage = z.infer<typeof NewLogTurnMessageSchema>;
+export type SyncLogMessage = z.infer<typeof SyncLogMessageSchema>;
 
-  choices: supplyStack[];
-}
-
-export interface PickYesNoResponse extends Message {
-  kind: typeof MessageKinds.PICK_YES_NO_RESPONSE;
-
-  choice: boolean;
-}
-
-export interface GameStateUpdateMessage extends Message {
-  kind: typeof MessageKinds.GAME_STATE_UPDATE;
-
-  game_state: GameState;
-  player: SharablePlayer;
-  players: PlayerDisplayInfo[];
-}
-
-export interface GameEndMessage extends Message {
-  kind: typeof MessageKinds.GAME_END;
-
-  winner_indices: number[];
-  players_end_infos_in_victory_order: PlayerEndInfo[];
-}
-
-export interface LogEventMessage extends Message {
-  kind: typeof MessageKinds.LOG_EVENT;
-
-  log_messages: LogEntry[];
-}
-
-export interface NewLogTurnMessage extends Message {
-  kind: typeof MessageKinds.NEW_TURN;
-
-  turn: Turn;
-}
-
-export interface SyncLogMessage extends Message {
-  kind: typeof MessageKinds.SYNC_LOG;
-
-  log: Turn[];
-}
+export type RequestMessage =
+  | PickCardsRequest
+  | PickSupplyPileRequest
+  | PickYesNoRequest;
 
 export function serializeMessage(msg: Message): string {
   return JSON.stringify(msg);
 }
 
-export function parseMessage(msg: string): Message | undefined {
-  try {
-    const parsed = JSON.parse(msg);
-    if (!parsed.kind) {
-      return undefined;
-    }
+export type ParseMessageResult =
+  | { success: true; data: Message }
+  | { success: false; error: z.ZodError };
 
-    return parsed;
-  } catch {
-    return undefined;
+export function parseMessage(msg: string): ParseMessageResult {
+  let json: unknown;
+  try {
+    json = JSON.parse(msg);
+  } catch (e) {
+    return {
+      success: false,
+      error: new z.ZodError([
+        {
+          code: "custom",
+          message: e instanceof Error ? e.message : "Invalid JSON",
+          path: [],
+          input: msg,
+        },
+      ]),
+    };
   }
+
+  return MessageSchema.safeParse(json);
 }

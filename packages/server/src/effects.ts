@@ -1,6 +1,5 @@
 import type { Player } from "shared";
 import { type Card, type CardName, CardTypes } from "shared/cards";
-import { Library } from "shared/cards/base";
 import { Curse } from "shared/cards/curses";
 import { Copper, Gold, Silver } from "shared/cards/treasures";
 import {
@@ -483,7 +482,7 @@ export const effect_table: Record<CardName, (game: Game) => void> = {
       player.hand.length < 7 &&
       player.deck.length + player.discard_pile.length > 0
     ) {
-      effect_table[Library.name](game);
+      effect_table.Library(game);
     } else {
       game.discard_pile(player, game.game_state.set_aside_cards);
     }
@@ -499,7 +498,7 @@ export const effect_table: Record<CardName, (game: Game) => void> = {
           player.hand.length < 7 &&
           player.deck.length + player.discard_pile.length > 0
         ) {
-          effect_table[Library.name](game);
+          effect_table.Library(game);
         } else {
           game.discard_pile(player, game.game_state.set_aside_cards);
         }
