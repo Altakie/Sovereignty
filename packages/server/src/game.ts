@@ -430,28 +430,30 @@ export class Game {
 
   reconnect_player(clientid: string, socket: MessageSink) {
     for (const player_info of this.player_infos) {
-      if (player_info.clientid === clientid) {
-        player_info.socket = socket;
-
-        const front = this.wait_queue.peek_front_waiting();
-        if (
-          front.is_some_and((front) => front.player_info.clientid === clientid)
-        ) {
-          // Resend message if the player the game is waiting on reconnected
-          socket.send(
-            serializeMessage(
-              this.wait_queue.peek_front_waiting().unwrap().request,
-            ),
-          );
-        }
-
-        const log_message: SyncLogMessage = {
-          kind: MessageKinds.SYNC_LOG,
-          log: this.event_log.log_messages,
-        };
-
-        socket.send(serializeMessage(log_message));
+      if (player_info.clientid !== clientid) {
+        continue;
       }
+      player_info.socket = socket;
+
+      const front = this.wait_queue.peek_front_waiting();
+      if (
+        front.is_some_and((front) => front.player_info.clientid === clientid)
+      ) {
+        // Resend message if the player the game is waiting on reconnected
+        socket.send(
+          serializeMessage(
+            this.wait_queue.peek_front_waiting().unwrap().request,
+          ),
+        );
+      }
+
+      const log_message: SyncLogMessage = {
+        kind: MessageKinds.SYNC_LOG,
+        log: this.event_log.log_messages,
+      };
+
+      socket.send(serializeMessage(log_message));
+
       const started_msg: StartedMessage = {
         kind: MessageKinds.STARTED,
         players: this.get_player_display_infos(),
@@ -460,7 +462,7 @@ export class Game {
         player: toSharablePlayer(player_info.player),
       };
 
-      player_info.socket.send(serializeMessage(started_msg));
+      socket.send(serializeMessage(started_msg));
     }
   }
 

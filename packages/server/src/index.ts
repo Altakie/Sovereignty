@@ -22,6 +22,8 @@ function getClientId(c: Context): string | undefined {
 
 const lobbies: Map<string, Lobby> = new Map();
 
+const HOST_GC_GRACE_PERIOD_MS = 30_000;
+
 app.get("/lobbies", (c) => {
   return c.json({
     lobbies: lobbies
@@ -142,7 +144,11 @@ app.use(
         lobby.remove_player(clientid);
 
         if (lobby.host.is_none()) {
-          lobbies.delete(lobby.id);
+          setTimeout(() => {
+            if (lobby.host.is_none()) {
+              lobbies.delete(lobby.id);
+            }
+          }, HOST_GC_GRACE_PERIOD_MS);
         }
       },
     };
