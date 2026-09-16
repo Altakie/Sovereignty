@@ -13,7 +13,11 @@ function receive(lobby: Lobby, clientid: string, raw: string) {
 
 describe("message validation at the lobby boundary", () => {
   test("a well-formed message is forwarded to the lobby", () => {
-    const lobby = new Lobby("test-lobby");
+    const lobby = new Lobby(
+      "test-lobby",
+      () => {},
+      () => {},
+    );
     lobby.add_player("client-1", "Alice", { send: () => {} });
 
     const outcome = receive(
@@ -29,7 +33,11 @@ describe("message validation at the lobby boundary", () => {
   });
 
   test("malformed JSON is rejected and never reaches the lobby", () => {
-    const lobby = new Lobby("test-lobby");
+    const lobby = new Lobby(
+      "test-lobby",
+      () => {},
+      () => {},
+    );
     lobby.add_player("client-1", "Alice", { send: () => {} });
 
     const outcome = receive(lobby, "client-1", "{not valid json");
@@ -41,7 +49,11 @@ describe("message validation at the lobby boundary", () => {
   });
 
   test("a structurally invalid message is rejected and never reaches the lobby", () => {
-    const lobby = new Lobby("test-lobby");
+    const lobby = new Lobby(
+      "test-lobby",
+      () => {},
+      () => {},
+    );
     lobby.add_player("client-1", "Alice", { send: () => {} });
 
     const outcome = receive(
@@ -57,7 +69,11 @@ describe("message validation at the lobby boundary", () => {
   });
 
   test("an unrecognized message kind is rejected", () => {
-    const lobby = new Lobby("test-lobby");
+    const lobby = new Lobby(
+      "test-lobby",
+      () => {},
+      () => {},
+    );
     lobby.add_player("client-1", "Alice", { send: () => {} });
 
     const outcome = receive(

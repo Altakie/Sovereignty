@@ -1929,7 +1929,10 @@ describe("Throne Room", () => {
   test("re-prompts for a choice-driven action card on both plays", () => {
     const { game, sinks, clientids } = createTestGame({
       players: [
-        { hand: [BaseKingdomCards.Chapel, Copper, Copper, Copper, Copper], deck: [] },
+        {
+          hand: [BaseKingdomCards.Chapel, Copper, Copper, Copper, Copper],
+          deck: [],
+        },
       ],
     });
     const player = getPlayer(game, clientids[0]!);
@@ -1970,13 +1973,7 @@ describe("Throne Room", () => {
       players: [
         { hand: [BaseKingdomCards.Militia], deck: [] },
         {
-          hand: [
-            BaseKingdomCards.Moat,
-            Copper,
-            Copper,
-            Copper,
-            Copper,
-          ],
+          hand: [BaseKingdomCards.Moat, Copper, Copper, Copper, Copper],
           deck: [],
         },
       ],
