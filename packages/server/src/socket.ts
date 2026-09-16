@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { randomUUIDv7, sleep } from "bun";
 import type { GameState, SharablePlayer } from "shared";
+import type { ClientID } from "shared/ids";
 import {
   type GameStateUpdateMessage,
   type Message,
@@ -51,14 +52,14 @@ const system_instruction =
 
 const MAX_REQUESTS = 2;
 export class AISocket implements MessageSink {
-  client_id: string;
-  on_response: (clientid: string, message: Message) => void;
+  client_id: ClientID;
+  on_response: (clientid: ClientID, message: Message) => void;
   game_state?: GameState;
   player?: SharablePlayer;
   ai: GoogleGenAI;
   previous_interaction_id?: string;
 
-  constructor(on_response: (clientid: string, message: Message) => void) {
+  constructor(on_response: (clientid: ClientID, message: Message) => void) {
     this.client_id = randomUUIDv7();
     this.on_response = on_response;
     this.ai = new GoogleGenAI({});

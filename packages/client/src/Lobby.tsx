@@ -21,6 +21,7 @@ import "./App.css";
 import type { GameState, PlayerDisplayInfo, SharablePlayer } from "shared";
 import { BaseKingdomCards } from "shared/cards/base";
 import type { Card, CardInfo, CardName } from "shared/cards.ts";
+import type { LobbyID } from "shared/ids.ts";
 import type { LogEntry, Turn } from "shared/log.ts";
 import { none, type Option, some } from "shared/option.ts";
 import type { supplyStack } from "shared/supply.ts";
@@ -52,8 +53,8 @@ export const LobbyStates = Object.freeze({
 });
 
 type LobbyStore = {
-  lobby_id: string;
-  set_lobby_id: (id: string) => void;
+  lobby_id: LobbyID;
+  set_lobby_id: (id: LobbyID) => void;
   connected: boolean;
   set_connected: (connected: boolean) => void;
   game_socket: WebSocket | null;
@@ -102,7 +103,7 @@ type LobbyStore = {
 
 export const useLobbyStore = create<LobbyStore>((set, get) => ({
   lobby_id: "",
-  set_lobby_id: (id: string) => set(() => ({ lobby_id: id })),
+  set_lobby_id: (id: LobbyID) => set(() => ({ lobby_id: id })),
   connected: false,
   set_connected: (connected: boolean) => {
     set({ connected: connected });
@@ -360,7 +361,7 @@ export function resolve_message(ev: MessageEvent) {
   }
 }
 
-export function gameSocketUrl(id: string, name?: string): string {
+export function gameSocketUrl(id: LobbyID, name?: string): string {
   return name ? `/game/${id}?name=${encodeURIComponent(name)}` : `/game/${id}`;
 }
 

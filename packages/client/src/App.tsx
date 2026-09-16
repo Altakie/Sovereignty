@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircleIcon } from "lucide-react";
+import type { LobbyID } from "shared/ids";
 import type { LobbyInfo } from "shared/lobby";
 import { MessageKinds, parseMessage } from "shared/messages";
 import { none, type Option, some } from "shared/option.ts";
+import type { InGame } from "shared/session";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -76,6 +78,9 @@ function Home() {
   const [reconnect_name, setReconnectName] = useState<string | undefined>(
     undefined,
   );
+  const [reconnect_lobby_id, setReconnectLobbyID] = useState<
+    LobbyID | undefined
+  >(undefined);
 
   const [set_router_state, name, set_name, error, set_error] = useGlobalStore(
     useShallow((state) => [
@@ -90,9 +95,10 @@ function Home() {
   useEffect(() => {
     fetch("/session")
       .then((res) => res.json())
-      .then((session: { in_game: boolean; name?: string }) => {
+      .then((session: InGame) => {
         if (session.in_game) {
           setReconnectName(session.name);
+          setReconnectLobbyID(session.lobby_id);
         }
       })
       .catch((e) => console.log(e));
@@ -117,7 +123,16 @@ function Home() {
       {reconnect_name && (
         <p>
           You have a game in progress as {reconnect_name}.
-          <Button onClick={() => set_router_state(RouterStates.LOBBY)}>
+          <Button
+            onClick={() => {
+              if (!reconnect_lobby_id) {
+                return;
+              }
+              useLobbyStore.getState().set_lobby_id(reconnect_lobby_id);
+              useLobbyStore.getState().set_name(reconnect_name);
+              set_router_state(RouterStates.LOBBY);
+            }}
+          >
             Reconnect
           </Button>
         </p>
@@ -137,7 +152,7 @@ function Home() {
           set_error(none());
           mutate(undefined, {
             onSuccess(data) {
-              const lobby_id = data.lobby_id;
+              const lobby_id: LobbyID = data.lobby_id;
               useLobbyStore.getState().set_lobby_id(lobby_id);
               connect_to_lobby(lobby_id, name, () => {});
             },
@@ -212,7 +227,7 @@ function LobbyFinder() {
   );
 }
 
-function LobbyConnectButton({ id }: { id: string }) {
+function LobbyConnectButton({ id }: { id: LobbyID }) {
   const { name, set_error, set_router_state } = useGlobalStore(
     useShallow((state) => ({
       name: state.name,
@@ -236,7 +251,7 @@ function LobbyConnectButton({ id }: { id: string }) {
 }
 
 function connect_to_lobby(
-  id: string,
+  id: LobbyID,
   name: string,
   set_loading: (loading: boolean) => void,
 ) {

@@ -1,5 +1,7 @@
+import type { LobbyID } from "./ids";
+
 export type LobbyInfo = {
-  id: string;
+  id: LobbyID;
   player_count: number;
   max_players: number;
   host: string;
