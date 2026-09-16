@@ -1,5 +1,5 @@
-export function some<T>(val: T): Option<T> {
-  return new Option(val);
+export function some<T>(val: T): Option<Exclude<T, undefined>> {
+  return new Option(val) as Option<Exclude<T, undefined>>;
 }
 
 export function none<T>(): Option<T> {
@@ -29,11 +29,11 @@ export class Option<T> {
     return this;
   }
 
-  map<R>(f: (val: T) => R): Option<R> {
+  map<R>(f: (val: T) => R): Option<Exclude<R, undefined>> {
     if (this.val === undefined) {
       return none();
     }
-    return new Option(f(this.val));
+    return new Option(f(this.val)) as Option<Exclude<R, undefined>>;
   }
 
   is_some() {
@@ -82,5 +82,9 @@ export class Option<T> {
     }
 
     return this.val;
+  }
+
+  equals(other: Option<T>) {
+    return this.val === other.val;
   }
 }

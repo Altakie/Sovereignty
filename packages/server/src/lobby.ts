@@ -1,3 +1,4 @@
+import type { ClientID, LobbyID } from "shared/ids";
 import type { LobbyInfo } from "shared/lobby";
 import {
   type ConnectMessage,
@@ -21,24 +22,31 @@ const PLAYER_TYPES = Object.freeze({
 type PlayerType = (typeof PLAYER_TYPES)[keyof typeof PLAYER_TYPES];
 
 export type PlayerLobbyInfo = {
-  clientid: string;
+  clientid: ClientID;
   socket: MessageSink;
   name: string;
   player_type: PlayerType;
 };
 
+type OnGameStart = (client_ids: ClientID[], lobby_id: LobbyID) => void;
+type OnGameEnd = (client_ids: ClientID[]) => void;
+
 export class Lobby {
-  id: string;
-  player_lobby_infos: Map<string, PlayerLobbyInfo>;
+  id: LobbyID;
+  player_lobby_infos: Map<ClientID, PlayerLobbyInfo>;
   host: Option<PlayerLobbyInfo>;
   game?: Game;
   max_players: number;
+  on_game_start: OnGameStart;
+  on_game_end: OnGameEnd;
 
-  constructor(id: string) {
+  constructor(id: LobbyID, on_game_start: OnGameStart, on_game_end: OnGameEnd) {
     this.id = id;
     this.player_lobby_infos = new Map();
     this.max_players = MAX_PLAYERS;
     this.host = none();
+    this.on_game_start = on_game_start;
+    this.on_game_end = on_game_end;
   }
 
   get_info(): LobbyInfo {
@@ -51,7 +59,7 @@ export class Lobby {
   }
 
   add_player(
-    clientid: string,
+    clientid: ClientID,
     name: string,
     ws: MessageSink,
     player_type?: PlayerType,
@@ -122,7 +130,7 @@ export class Lobby {
     this.add_player(ai_player.client_id, "Gemini", ai_player, PLAYER_TYPES.AI);
   }
 
-  resolve_message(clientid: string, message: Message) {
+  resolve_message(clientid: ClientID, message: Message) {
     console.log(`Message received: ${JSON.stringify(message)}`);
     switch (message.kind) {
       case MessageKinds.START: {
@@ -139,6 +147,7 @@ export class Lobby {
           start_message.chosen_cards,
         );
 
+        this.on_game_start(this.get_player_client_ids(), this.id);
         this.game.start_game();
 
         console.log(
@@ -175,7 +184,7 @@ export class Lobby {
     }
   }
 
-  remove_player(clientid: string) {
+  remove_player(clientid: ClientID) {
     // TODO: Only send disconnect message to players in lobby unless the player who left was in the game
     const name = this.player_lobby_infos.get(clientid)?.name;
     if (name == null) {
@@ -219,5 +228,9 @@ export class Lobby {
 
   get_player_lobby_infos(): PlayerLobbyInfo[] {
     return this.player_lobby_infos.values().toArray();
+  }
+
+  get_player_client_ids(): ClientID[] {
+    return this.get_player_lobby_infos().map((pi) => pi.clientid);
   }
 }

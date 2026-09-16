@@ -22,6 +22,7 @@ import {
   type PickCardsDescription,
   PickCardsDescriptions,
 } from "shared/effect_descriptions";
+import type { ClientID } from "shared/ids";
 import { Log, type LogEntry, LogEventKinds } from "shared/log";
 import {
   type GameEndMessage,
@@ -77,7 +78,7 @@ class WaitQueue {
     this.wait_queue = new Deque();
   }
 
-  resolve(response: Message, clientid: string) {
+  resolve(response: Message, clientid: ClientID) {
     console.log("Resolving response");
     const front = this.peek_front_waiting();
     front.match({
@@ -176,7 +177,7 @@ function new_game_state(
 
 export type PlayerInfo = {
   player: Player;
-  clientid: string;
+  clientid: ClientID;
   socket: MessageSink;
 };
 
@@ -428,7 +429,7 @@ export class Game {
     this.action_phase();
   }
 
-  reconnect_player(clientid: string, socket: MessageSink) {
+  reconnect_player(clientid: ClientID, socket: MessageSink) {
     for (const player_info of this.player_infos) {
       if (player_info.clientid !== clientid) {
         continue;
@@ -466,7 +467,7 @@ export class Game {
     }
   }
 
-  resolve_player_choice(clientid: string, response: Message) {
+  resolve_player_choice(clientid: ClientID, response: Message) {
     if (this.wait_queue.isEmpty()) {
       console.log("No wait info");
       return;
@@ -964,6 +965,7 @@ export class Game {
     for (const player_info of this.player_infos) {
       player_info.socket.send(serialized_names);
     }
+    this.lobby.on_game_end(this.player_infos.map((pi) => pi.clientid));
     this.lobby.game = undefined;
   }
 

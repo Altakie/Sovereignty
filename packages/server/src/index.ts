@@ -4,7 +4,10 @@ import { type Context, Hono } from "hono";
 import { serveStatic, upgradeWebSocket, websocket } from "hono/bun";
 import { getCookie, setCookie } from "hono/cookie";
 import { cors } from "hono/cors";
+import type { ClientID, LobbyID } from "shared/ids";
 import { parseMessage } from "shared/messages";
+import { Option } from "shared/option";
+import type { InGame, SessionReturn } from "shared/session";
 import { Lobby } from "./lobby";
 
 config();
@@ -16,11 +19,11 @@ app.use(cors());
 //   origin: "*"
 // }))
 
-function getClientId(c: Context): string | undefined {
+function getClientId(c: Context): ClientID | undefined {
   return getCookie(c, "clientid");
 }
 
-const lobbies: Map<string, Lobby> = new Map();
+const lobbies: Map<LobbyID, Lobby> = new Map();
 
 const HOST_GC_GRACE_PERIOD_MS = 30_000;
 
@@ -39,35 +42,75 @@ app.post("/newlobby", (c) => {
     return c.json({ error: "Name is required" }, 400);
   }
 
-  let new_lobby_id = randomUUIDv7();
+  let new_lobby_id: LobbyID = randomUUIDv7();
   while (lobbies.get(new_lobby_id)) {
     new_lobby_id = randomUUIDv7();
   }
 
-  lobbies.set(new_lobby_id, new Lobby(new_lobby_id));
+  lobbies.set(
+    new_lobby_id,
+    new Lobby(
+      new_lobby_id,
+      register_players_in_game,
+      deregister_players_in_game,
+    ),
+  );
 
   return c.json({
     lobby_id: new_lobby_id,
   });
 });
 
-// app.get("/session", (c) => {
-//   const clientid = getCookie(c, "clientid");
-//   const player_info = clientid
-//     ? lobby.game?.player_infos.find((pi) => pi.clientid === clientid)
-//     : undefined;
-//
-//   if (!player_info) {
-//     return c.json({ in_game: false });
-//   }
-//
-//   return c.json({ in_game: true, name: player_info.player.name });
-// });
+// Need to fix reconnect handling
+// Ideally query an endpoint that tells us if the clientid is present in a game and get back the lobbyid or nothing
+// When a game is started, it needs to register playerids to some kind of map
+// Players then should only be allowed in one game at a time
+// When a game ends, remove all corresponding entries from the map
+// Or just go through all clientids in that game and delete the keys
+
+const in_game: Map<ClientID, LobbyID> = new Map();
+
+function register_players_in_game(clientids: ClientID[], lobby_id: LobbyID) {
+  for (const clientid of clientids) {
+    in_game.set(clientid, lobby_id);
+  }
+}
+
+function deregister_players_in_game(clientids: ClientID[]) {
+  for (const clientid of clientids) {
+    in_game.delete(clientid);
+  }
+}
+
+app.get("/session", (c) => {
+  const clientid = new Option(getClientId(c));
+  const lobby_id = clientid.map((c) => in_game.get(c));
+  const player_info = lobby_id
+    .map((lobby_id) => lobbies.get(lobby_id))
+    .map((lobby) =>
+      lobby?.game?.player_infos.find((pi) =>
+        clientid.map((ci) => ci === pi.clientid),
+      ),
+    );
+
+  return player_info.match({
+    Some(player_info) {
+      return c.json<InGame>({
+        in_game: true,
+        name: player_info.player.name,
+        lobby_id: lobby_id.unwrap(),
+      });
+    },
+    None() {
+      return c.json<SessionReturn>({ in_game: false });
+    },
+  });
+});
 
 app.use(
   "/game/:id",
   upgradeWebSocket((c) => {
-    const id = c.req.param("id");
+    const id: LobbyID | undefined = c.req.param("id");
     const lobby = lobbies.get(id ? id : "");
     if (lobby === undefined) {
       return {
@@ -146,6 +189,7 @@ app.use(
         if (lobby.host.is_none()) {
           setTimeout(() => {
             if (lobby.host.is_none()) {
+              deregister_players_in_game(lobby.get_player_client_ids());
               lobbies.delete(lobby.id);
             }
           }, HOST_GC_GRACE_PERIOD_MS);
@@ -167,10 +211,6 @@ app.use("/*", (c, next) => {
 });
 
 app.use("/*", serveStatic({ root: "../client/dist" }));
-
-// app.get('/', (context) => {
-//   return context.text("Hi!")
-// })
 
 export default {
   hostname: "0.0.0.0",
