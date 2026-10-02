@@ -1,16 +1,15 @@
-# Dominion Simulator (Name Subject to Change)
+# Sovereignty: self-hostable, real-time multiplayer Dominion with LLM opponents
 
 ![Screenshot of Game In Progress](./media/game_screen.png)
 
-A self-hosted game engine for the popular deck building game Dominion.
+A self-hosted multiplayer game engine for the popular deck building game Dominion.
 Heavily inspired by [Dominion-Online](https://dominion.games/),
 which is a great option for those who do not want to self host.
-Allows you to play dominion with a group of friends remotely through a self-hosted server.
+Allows you to play Dominion with a group of friends remotely through a self-hosted server.
 Please consider buying a hard copy of Dominion and any expansions you may like if you enjoy the game
 and want to support its creators.
 
-This project is currently still a work in progress so there may be bugs present
-and UI is subject to change.
+Currently supports up to 6 player games and multiple lobbies.
 
 ## Currently Supported Expansions
 
@@ -24,7 +23,7 @@ and UI is subject to change.
 git clone https://github.com/Altakie/dominion-simulator.git
 ```
 
-2. Install dependencies. We recommend using [Bun](https://bun.com/) as the package manager.
+1. Install dependencies. We recommend using [Bun](https://bun.com/) as the package manager.
 
 ```bash
 bun install
